@@ -1,4 +1,4 @@
-import { verifyTOTP } from "@oslojs/otp";
+import { verifyTOTP } from "$lib/server/utils";
 import { getUserTOTPKey } from "$lib/server/user";
 import { validatePasswordResetSessionRequest, setPasswordResetSessionAs2FAVerified } from "$lib/server/password-reset";
 import { totpBucket } from "$lib/server/2fa";

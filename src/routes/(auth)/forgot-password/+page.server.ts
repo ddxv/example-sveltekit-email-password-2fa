@@ -62,10 +62,10 @@ async function action(event: RequestEvent) {
 			email
 		});
 	}
-	invalidateUserPasswordResetSessions(user.id);
+	await invalidateUserPasswordResetSessions(user.id);
 	const sessionToken = generateSessionToken();
 	const session = await createPasswordResetSession(sessionToken, user.id, user.email);
-	sendPasswordResetEmail(session.email, session.code);
+	await sendPasswordResetEmail(session.email, session.code);
 	await setPasswordResetSessionTokenCookie(event, sessionToken, session.expiresAt);
 	return redirect(302, "/reset-password/verify-email");
 }

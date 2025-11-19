@@ -177,7 +177,7 @@ async function resendEmail(event: RequestEvent) {
 			}
 		});
 	}
-	sendVerificationEmail(verificationRequest.email, verificationRequest.code);
+	await sendVerificationEmail(verificationRequest.email, verificationRequest.code);
 	setEmailVerificationRequestCookie(event, verificationRequest);
 	return {
 		resend: {

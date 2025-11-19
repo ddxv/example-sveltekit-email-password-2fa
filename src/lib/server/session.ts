@@ -1,6 +1,5 @@
 import { db } from "./db";
-import { encodeBase32LowerCaseNoPadding, encodeHexLowerCase } from "@oslojs/encoding";
-import { sha256 } from "@oslojs/crypto/sha2";
+import { encodeBase32, encodeHexLowerCase, sha256 } from "$lib/server/utils";
 import type { User } from "./user";
 import type { RequestEvent } from "@sveltejs/kit";
 
@@ -30,7 +29,7 @@ interface SessionRow {
 }
 
 export async function validateSessionToken(token: string): Promise<SessionValidationResult> {
-	const sessionId = encodeHexLowerCase(sha256(new TextEncoder().encode(token)));
+	const sessionId = encodeHexLowerCase(await sha256(new TextEncoder().encode(token)));
 	const row = await db.queryOne<SessionRow>(
 		`
 SELECT 
@@ -121,7 +120,7 @@ export function deleteSessionTokenCookie(event: RequestEvent): void {
 export function generateSessionToken(): string {
 	const tokenBytes = new Uint8Array(20);
 	crypto.getRandomValues(tokenBytes);
-	const token = encodeBase32LowerCaseNoPadding(tokenBytes);
+	const token = encodeBase32(tokenBytes, false, false);
 	return token;
 }
 
@@ -133,7 +132,7 @@ export async function createSession(
 	// For session-only cookies, DB expiration is still set for cleanup purposes
 	sessionDurationHours: number = 0
 ): Promise<Session> {
-	const sessionId = encodeHexLowerCase(sha256(new TextEncoder().encode(token)));
+	const sessionId = encodeHexLowerCase(await sha256(new TextEncoder().encode(token)));
 	// For session-only (0 hours), set a reasonable DB expiration for cleanup
 	// The cookie itself won't have expires, so it clears on browser close
 	const expiresAt = sessionDurationHours > 0 

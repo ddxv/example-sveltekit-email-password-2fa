@@ -94,7 +94,7 @@ async function action(event: RequestEvent) {
 	}
 	const user = await createUser(email, username, password);
 	const emailVerificationRequest = await createEmailVerificationRequest(user.id, user.email);
-	sendVerificationEmail(emailVerificationRequest.email, emailVerificationRequest.code);
+	await sendVerificationEmail(emailVerificationRequest.email, emailVerificationRequest.code);
 	setEmailVerificationRequestCookie(event, emailVerificationRequest);
 
 	const sessionFlags: SessionFlags = {

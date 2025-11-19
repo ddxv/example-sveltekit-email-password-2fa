@@ -1,7 +1,7 @@
 import { totpBucket } from "$lib/server/2fa";
 import { fail, redirect } from "@sveltejs/kit";
 import { getUserTOTPKey } from "$lib/server/user";
-import { verifyTOTP } from "@oslojs/otp";
+import { verifyTOTP } from "$lib/server/utils";
 import { setSessionAs2FAVerified } from "$lib/server/session";
 
 import type { Actions, RequestEvent } from "./$types";

@@ -1,6 +1,5 @@
-import { createTOTPKeyURI, verifyTOTP } from "@oslojs/otp";
+import { createTOTPKeyURI, verifyTOTP, encodeHexLowerCase, encodeBase32, decodeBase64, encodeBase64 } from "$lib/server/utils";
 import { fail, redirect } from "@sveltejs/kit";
-import { decodeBase64, encodeBase64 } from "@oslojs/encoding";
 import { updateUserTOTPKey } from "$lib/server/user";
 import { setSessionAs2FAVerified } from "$lib/server/session";
 import { RefillingTokenBucket } from "$lib/server/rate-limit";
@@ -25,6 +24,7 @@ export async function load(event: RequestEvent) {
 	crypto.getRandomValues(totpKey);
 	const encodedTOTPKey = encodeBase64(totpKey);
 	const keyURI = createTOTPKeyURI("Demo", event.locals.user.username, totpKey, 30, 6);
+
 	const qrcode = renderSVG(keyURI);
 	return {
 		encodedTOTPKey,

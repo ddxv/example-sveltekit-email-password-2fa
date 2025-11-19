@@ -1,13 +1,12 @@
 import { db } from "./db";
-import { encodeHexLowerCase } from "@oslojs/encoding";
-import { generateRandomOTP } from "./utils";
-import { sha256 } from "@oslojs/crypto/sha2";
+import { encodeHexLowerCase } from "$lib/server/utils";
+import { generateRandomOTP, sha256 } from "./utils";
 
 import type { RequestEvent } from "@sveltejs/kit";
 import type { User } from "./user";
 
 export async function createPasswordResetSession(token: string, userId: number, email: string): Promise<PasswordResetSession> {
-	const sessionId = encodeHexLowerCase(sha256(new TextEncoder().encode(token)));
+	const sessionId = encodeHexLowerCase(await sha256(new TextEncoder().encode(token)));
 	const session: PasswordResetSession = {
 		id: sessionId,
 		userId,
@@ -43,7 +42,7 @@ interface SessionQueryResult {
 }
 
 export async function validatePasswordResetSessionToken(token: string): Promise<PasswordResetSessionValidationResult> {
-	const sessionId = encodeHexLowerCase(sha256(new TextEncoder().encode(token)));
+	const sessionId = encodeHexLowerCase(await sha256(new TextEncoder().encode(token)));
 	const row = await db.queryOne<SessionQueryResult>(
 		`SELECT 
     prs.id, 
