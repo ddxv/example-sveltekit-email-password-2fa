@@ -1,8 +1,5 @@
 # Email and password example with 2FA in SvelteKit and PostgreSQL
 
-Built with SQLite.
-
-- Password check with HaveIBeenPwned
 - Email verification
 - 2FA with TOTP
 - 2FA recovery codes

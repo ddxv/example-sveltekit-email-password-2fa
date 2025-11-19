@@ -28,7 +28,7 @@ export async function createEmailVerificationRequest(userId: number, email: stri
 	await deleteUserEmailVerificationRequest(userId);
 	const idBytes = new Uint8Array(20);
 	crypto.getRandomValues(idBytes);
-	const id = encodeBase32(idBytes, false).toLowerCase();
+	const id = encodeBase32(idBytes).toLowerCase();
 
 	const code = generateRandomOTP();
 	const expiresAt = new Date(Date.now() + 1000 * 60 * 10);
