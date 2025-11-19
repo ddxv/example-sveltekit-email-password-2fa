@@ -1,3 +1,8 @@
+DROP TABLE public.users CASCADE;
+DROP TABLE public.sessions CASCADE;
+DROP TABLE public.email_verification_requests CASCADE;
+DROP TABLE public.password_reset_sessions CASCADE;
+
 CREATE TABLE public.users (
 	id serial4 NOT NULL,
 	email text NOT NULL,

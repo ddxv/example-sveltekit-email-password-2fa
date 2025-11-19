@@ -68,19 +68,13 @@ WHERE s.id = $1
 		registered2FA: row.has_totp
 	};
 	
+	// Check if session has expired
 	if (Date.now() >= session.expiresAt.getTime()) {
 		await db.execute("DELETE FROM sessions WHERE id = $1", [session.id]);
 		return { session: null, user: null };
 	}
 	
-	if (Date.now() >= session.expiresAt.getTime() - 1000 * 60 * 60 * 24 * 15) {
-		session.expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24 * 30);
-		await db.execute("UPDATE sessions SET expires_at = $1 WHERE id = $2", [
-			session.expiresAt,
-			session.id
-		]);
-	}
-	
+	// No auto-refresh - sessions expire naturally
 	return { session, user };
 }
 
@@ -92,14 +86,26 @@ export async function invalidateUserSessions(userId: number): Promise<void> {
 	await db.execute("DELETE FROM sessions WHERE user_id = $1", [userId]);
 }
 
-export function setSessionTokenCookie(event: RequestEvent, token: string, expiresAt: Date): void {
-	event.cookies.set("session", token, {
+export function setSessionTokenCookie(
+	event: RequestEvent, 
+	token: string, 
+	expiresAt: Date | null = null
+): void {
+	// If expiresAt is null, create a session-only cookie (expires when browser closes)
+	// Otherwise use the provided expiration
+	const cookieOptions: Parameters<typeof event.cookies.set>[2] = {
 		httpOnly: true,
 		path: "/",
 		secure: import.meta.env.PROD,
-		sameSite: "lax",
-		expires: expiresAt
-	});
+		sameSite: "lax"
+	};
+	
+	if (expiresAt !== null) {
+		cookieOptions.expires = expiresAt;
+	}
+	// If expiresAt is null, don't set expires - this makes it a session cookie
+	
+	event.cookies.set("session", token, cookieOptions);
 }
 
 export function deleteSessionTokenCookie(event: RequestEvent): void {
@@ -122,13 +128,22 @@ export function generateSessionToken(): string {
 export async function createSession(
 	token: string, 
 	userId: number, 
-	flags: SessionFlags
+	flags: SessionFlags,
+	// Session duration in hours (0 = session-only, expires when browser closes)
+	// For session-only cookies, DB expiration is still set for cleanup purposes
+	sessionDurationHours: number = 0
 ): Promise<Session> {
 	const sessionId = encodeHexLowerCase(sha256(new TextEncoder().encode(token)));
+	// For session-only (0 hours), set a reasonable DB expiration for cleanup
+	// The cookie itself won't have expires, so it clears on browser close
+	const expiresAt = sessionDurationHours > 0 
+		? new Date(Date.now() + 1000 * 60 * 60 * sessionDurationHours)
+		: new Date(Date.now() + 1000 * 60 * 60 * 24); // 24h for DB cleanup, cookie is session-only
+	
 	const session: Session = {
 		id: sessionId,
 		userId,
-		expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 24 * 30),
+		expiresAt,
 		twoFactorVerified: flags.twoFactorVerified
 	};
 	
