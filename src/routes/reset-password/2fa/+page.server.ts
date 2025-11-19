@@ -9,7 +9,7 @@ import { recoveryCodeBucket } from "$lib/server/2fa";
 import type { Actions, RequestEvent } from "./$types";
 
 export async function load(event: RequestEvent) {
-	const { session, user } = validatePasswordResetSessionRequest(event);
+	const { session, user } = await validatePasswordResetSessionRequest(event);
 
 	if (session === null) {
 		return redirect(302, "/forgot-password");
@@ -32,7 +32,7 @@ export const actions: Actions = {
 };
 
 async function totpAction(event: RequestEvent) {
-	const { session, user } = validatePasswordResetSessionRequest(event);
+	const { session, user } = await validatePasswordResetSessionRequest(event);
 	if (session === null) {
 		return fail(401, {
 			totp: {
@@ -71,7 +71,7 @@ async function totpAction(event: RequestEvent) {
 			}
 		});
 	}
-	const totpKey = getUserTOTPKey(session.userId);
+	const totpKey = await getUserTOTPKey(session.userId);
 	if (totpKey === null) {
 		return fail(403, {
 			totp: {
@@ -99,7 +99,7 @@ async function totpAction(event: RequestEvent) {
 }
 
 async function recoveryCodeAction(event: RequestEvent) {
-	const { session, user } = validatePasswordResetSessionRequest(event);
+	const { session, user } = await validatePasswordResetSessionRequest(event);
 	if (session === null) {
 		return fail(401, {
 			recoveryCode: {
@@ -146,7 +146,7 @@ async function recoveryCodeAction(event: RequestEvent) {
 			}
 		});
 	}
-	const valid = resetUser2FAWithRecoveryCode(session.userId, code);
+	const valid = await resetUser2FAWithRecoveryCode(session.userId, code);
 	if (!valid) {
 		return fail(400, {
 			recoveryCode: {

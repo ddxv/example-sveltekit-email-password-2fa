@@ -5,35 +5,35 @@ import { encodeBase32 } from "@oslojs/encoding";
 
 import type { RequestEvent } from "@sveltejs/kit";
 
-export function getUserEmailVerificationRequest(userId: number, id: string): EmailVerificationRequest | null {
-	const row = db.queryOne(
-		"SELECT id, user_id, code, email, expires_at FROM email_verification_request WHERE id = ? AND user_id = ?",
+export async function getUserEmailVerificationRequest(userId: number, id: string): Promise<EmailVerificationRequest | null> {
+	const row = await db.queryOne<{ id: string, user_id: number, code: string, email: string, expires_at: string }>(
+		"SELECT id, user_id, code, email, expires_at FROM email_verification_requests WHERE id = $1 AND user_id = $2",
 		[id, userId]
 	);
 	if (row === null) {
 		return row;
 	}
 	const request: EmailVerificationRequest = {
-		id: row.string(0),
-		userId: row.number(1),
-		code: row.string(2),
-		email: row.string(3),
-		expiresAt: new Date(row.number(4) * 1000)
+		id: row.id,
+		userId: row.user_id,
+		code: row.code,
+		email: row.email,
+		expiresAt: new Date(row.expires_at)
 	};
 	return request;
 }
 
-export function createEmailVerificationRequest(userId: number, email: string): EmailVerificationRequest {
-	deleteUserEmailVerificationRequest(userId);
+export async function createEmailVerificationRequest(userId: number, email: string): Promise<EmailVerificationRequest> {
+	await deleteUserEmailVerificationRequest(userId);
 	const idBytes = new Uint8Array(20);
 	crypto.getRandomValues(idBytes);
 	const id = encodeBase32(idBytes).toLowerCase();
 
 	const code = generateRandomOTP();
 	const expiresAt = new Date(Date.now() + 1000 * 60 * 10);
-	db.queryOne(
-		"INSERT INTO email_verification_request (id, user_id, code, email, expires_at) VALUES (?, ?, ?, ?, ?) RETURNING id",
-		[id, userId, code, email, Math.floor(expiresAt.getTime() / 1000)]
+	await db.queryOne<{ id: string }>(
+		"INSERT INTO email_verification_requests (id, user_id, code, email, expires_at) VALUES ($1, $2, $3, $4, $5) RETURNING id",
+		[id, userId, code, email, expiresAt]
 	);
 
 	const request: EmailVerificationRequest = {
@@ -46,8 +46,8 @@ export function createEmailVerificationRequest(userId: number, email: string): E
 	return request;
 }
 
-export function deleteUserEmailVerificationRequest(userId: number): void {
-	db.execute("DELETE FROM email_verification_request WHERE user_id = ?", [userId]);
+export async function deleteUserEmailVerificationRequest(userId: number): Promise<void> {
+	await db.execute("DELETE FROM email_verification_requests WHERE user_id = $1", [userId]);
 }
 
 export function sendVerificationEmail(email: string, code: string): void {
@@ -74,7 +74,7 @@ export function deleteEmailVerificationRequestCookie(event: RequestEvent): void 
 	});
 }
 
-export function getUserEmailVerificationRequestFromRequest(event: RequestEvent): EmailVerificationRequest | null {
+export async function getUserEmailVerificationRequestFromRequest(event: RequestEvent): Promise<EmailVerificationRequest | null> {
 	if (event.locals.user === null) {
 		return null;
 	}
@@ -82,7 +82,7 @@ export function getUserEmailVerificationRequestFromRequest(event: RequestEvent):
 	if (id === null) {
 		return null;
 	}
-	const request = getUserEmailVerificationRequest(event.locals.user.id, id);
+	const request = await getUserEmailVerificationRequest(event.locals.user.id, id);
 	if (request === null) {
 		deleteEmailVerificationRequestCookie(event);
 	}

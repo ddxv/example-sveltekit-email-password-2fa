@@ -6,13 +6,13 @@ import { generateRandomRecoveryCode } from "./utils";
 export const totpBucket = new ExpiringTokenBucket<number>(5, 60 * 30);
 export const recoveryCodeBucket = new ExpiringTokenBucket<number>(3, 60 * 60);
 
-export function resetUser2FAWithRecoveryCode(userId: number, recoveryCode: string): boolean {
+export async function resetUser2FAWithRecoveryCode(userId: number, recoveryCode: string): Promise<boolean> {
 	// Note: In Postgres and MySQL, these queries should be done in a transaction using SELECT FOR UPDATE
-	const row = db.queryOne("SELECT recovery_code FROM user WHERE id = ?", [userId]);
+	const row = await db.queryOne<{ recovery_code: Buffer }>("SELECT recovery_code FROM user WHERE id = ?", [userId]);
 	if (row === null) {
 		return false;
 	}
-	const encryptedRecoveryCode = row.bytes(0);
+	const encryptedRecoveryCode = row.recovery_code;
 	const userRecoveryCode = decryptToString(encryptedRecoveryCode);
 	if (recoveryCode !== userRecoveryCode) {
 		return false;
@@ -20,9 +20,9 @@ export function resetUser2FAWithRecoveryCode(userId: number, recoveryCode: strin
 
 	const newRecoveryCode = generateRandomRecoveryCode();
 	const encryptedNewRecoveryCode = encryptString(newRecoveryCode);
-	db.execute("UPDATE session SET two_factor_verified = 0 WHERE user_id = ?", [userId]);
+	await db.execute("UPDATE sessions SET two_factor_verified = 0 WHERE user_id = $1", [userId]);
 	// Compare old recovery code to ensure recovery code wasn't updated.
-	const result = db.execute("UPDATE user SET recovery_code = ?, totp_key = NULL WHERE id = ? AND recovery_code = ?", [
+	const result = await db.execute("UPDATE users SET recovery_code = $1, totp_key = NULL WHERE id = $2 AND recovery_code = $3", [
 		encryptedNewRecoveryCode,
 		userId,
 		encryptedRecoveryCode

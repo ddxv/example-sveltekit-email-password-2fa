@@ -1,28 +1,108 @@
-import sqlite3 from "better-sqlite3";
-import { SyncDatabase } from "@pilcrowjs/db-query";
+import { Pool, type PoolConfig, type QueryResult } from "pg";
+import { env } from "$env/dynamic/private";
 
-import type { SyncAdapter } from "@pilcrowjs/db-query";
+class Database {
+	private pool: Pool;
+	private isConnected = false;
 
-const sqlite = sqlite3("sqlite.db");
+	constructor() {
+		const config: PoolConfig = {
+			host: env.PGHOST || "localhost",
+			port: parseInt(env.PGPORT || "5432"),
+			database: env.PGDATABASE || "goblinadmin",
+			user: env.PGUSER || "frontend",
+			password: env.PGPASSWORD,
+			max: 20, // maximum pool size
+			idleTimeoutMillis: 30000,
+			connectionTimeoutMillis: 2000,
+		};
 
-const adapter: SyncAdapter<sqlite3.RunResult> = {
-	query: (statement: string, params: unknown[]): unknown[][] => {
-		const result = sqlite
-			.prepare(statement)
-			.raw()
-			.all(...params);
-		return result as unknown[][];
-	},
-	execute: (statement: string, params: unknown[]): sqlite3.RunResult => {
-		const result = sqlite.prepare(statement).run(...params);
-		return result;
+		this.pool = new Pool(config);
+
+		// Handle pool errors
+		this.pool.on("error", (err) => {
+			console.error("Unexpected database pool error:", err);
+		});
 	}
-};
 
-class Database extends SyncDatabase<sqlite3.RunResult> {
-	public inTransaction(): boolean {
-		return sqlite.inTransaction;
+	async connect(): Promise<void> {
+		if (this.isConnected) return;
+		
+		try {
+			const client = await this.pool.connect();
+			client.release();
+			this.isConnected = true;
+			console.log("Database connected successfully");
+		} catch (error) {
+			console.error("Failed to connect to database:", error);
+			throw error;
+		}
+	}
+
+	async queryOne<T = unknown>(
+		sql: string,
+		params: unknown[] = []
+	): Promise<T | null> {
+		try {
+			const result = await this.pool.query(sql, params);
+			return result.rows.length === 0 ? null : (result.rows[0] as T);
+		} catch (error) {
+			console.error("Query error:", error, { sql, params });
+			throw error;
+		}
+	}
+
+	async query<T = unknown>(
+		sql: string,
+		params: unknown[] = []
+	): Promise<T[]> {
+		try {
+			const result = await this.pool.query(sql, params);
+			return result.rows as T[];
+		} catch (error) {
+			console.error("Query error:", error, { sql, params });
+			throw error;
+		}
+	}
+
+	async execute(
+		sql: string,
+		params: unknown[] = []
+	): Promise<{ changes: number }> {
+		try {
+			const result = await this.pool.query(sql, params);
+			return {
+				changes: result.rowCount || 0,
+			};
+		} catch (error) {
+			console.error("Execute error:", error, { sql, params });
+			throw error;
+		}
+	}
+
+	async transaction<T>(
+		callback: (client: Pool) => Promise<T>
+	): Promise<T> {
+		const client = await this.pool.connect();
+		try {
+			await client.query("BEGIN");
+			const result = await callback(client as unknown as Pool);
+			await client.query("COMMIT");
+			return result;
+		} catch (error) {
+			await client.query("ROLLBACK");
+			console.error("Transaction error:", error);
+			throw error;
+		} finally {
+			client.release();
+		}
+	}
+
+	async close(): Promise<void> {
+		await this.pool.end();
+		this.isConnected = false;
+		console.log("Database pool closed");
 	}
 }
 
-export const db = new Database(adapter);
+export const db = new Database();

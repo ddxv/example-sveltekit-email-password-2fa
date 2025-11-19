@@ -6,7 +6,7 @@ import { sha256 } from "@oslojs/crypto/sha2";
 import type { RequestEvent } from "@sveltejs/kit";
 import type { User } from "./user";
 
-export function createPasswordResetSession(token: string, userId: number, email: string): PasswordResetSession {
+export async function createPasswordResetSession(token: string, userId: number, email: string): Promise<PasswordResetSession> {
 	const sessionId = encodeHexLowerCase(sha256(new TextEncoder().encode(token)));
 	const session: PasswordResetSession = {
 		id: sessionId,
@@ -17,7 +17,7 @@ export function createPasswordResetSession(token: string, userId: number, email:
 		emailVerified: false,
 		twoFactorVerified: false
 	};
-	db.execute("INSERT INTO password_reset_session (id, user_id, email, code, expires_at) VALUES (?, ?, ?, ?, ?)", [
+	await db.execute("INSERT INTO password_reset_sessions (id, user_id, email, code, expires_at) VALUES ($1, $2, $3, $4, $5)", [
 		session.id,
 		session.userId,
 		session.email,
@@ -27,67 +27,94 @@ export function createPasswordResetSession(token: string, userId: number, email:
 	return session;
 }
 
-export function validatePasswordResetSessionToken(token: string): PasswordResetSessionValidationResult {
+interface SessionQueryResult {
+    id: string;
+    user_id: number;
+    email: string;
+    code: string;
+    expires_at: number;
+    email_verified: boolean;
+    two_factor_verified: boolean;
+    user_table_id: number;
+    user_table_email: string;
+    username: string;
+    user_email_verified: boolean;
+    registered_2fa: boolean;
+}
+
+export async function validatePasswordResetSessionToken(token: string): Promise<PasswordResetSessionValidationResult> {
 	const sessionId = encodeHexLowerCase(sha256(new TextEncoder().encode(token)));
-	const row = db.queryOne(
-		`SELECT password_reset_session.id, password_reset_session.user_id, password_reset_session.email, password_reset_session.code, password_reset_session.expires_at, password_reset_session.email_verified, password_reset_session.two_factor_verified,
-user.id, user.email, user.username, user.email_verified, IIF(user.totp_key IS NOT NULL, 1, 0)
-FROM password_reset_session INNER JOIN user ON user.id = password_reset_session.user_id
-WHERE password_reset_session.id = ?`,
+	const row = await db.queryOne<SessionQueryResult>(
+		`SELECT 
+    prs.id, 
+    prs.user_id, 
+    prs.email, 
+    prs.code, 
+    prs.expires_at, 
+    prs.email_verified, 
+    prs.two_factor_verified,
+    u.id AS user_table_id,
+    u.email AS user_table_email,
+    u.username, 
+    u.email_verified AS user_email_verified,
+    (u.totp_key IS NOT NULL) AS registered_2fa
+FROM password_reset_sessions prs 
+INNER JOIN users u ON u.id = prs.user_id
+WHERE prs.id = $1`,
 		[sessionId]
 	);
 	if (row === null) {
 		return { session: null, user: null };
 	}
 	const session: PasswordResetSession = {
-		id: row.string(0),
-		userId: row.number(1),
-		email: row.string(2),
-		code: row.string(3),
-		expiresAt: new Date(row.number(4) * 1000),
-		emailVerified: Boolean(row.number(5)),
-		twoFactorVerified: Boolean(row.number(6))
+		id: row.id,
+		userId: row.user_table_id,
+		email: row.user_table_email,
+		code: row.code,
+		expiresAt: new Date(row.expires_at),
+		emailVerified: row.user_email_verified,
+		twoFactorVerified: row.two_factor_verified
 	};
 	const user: User = {
-		id: row.number(7),
-		email: row.string(8),
-		username: row.string(9),
-		emailVerified: Boolean(row.number(10)),
-		registered2FA: Boolean(row.number(11))
+		id: row.user_table_id,
+		email: row.user_table_email,
+		username: row.username,
+		emailVerified: row.user_email_verified,
+		registered2FA: row.registered_2fa
 	};
 	if (Date.now() >= session.expiresAt.getTime()) {
-		db.execute("DELETE FROM password_reset_session WHERE id = ?", [session.id]);
+		await db.execute("DELETE FROM password_reset_sessions WHERE id = $1", [session.id]);
 		return { session: null, user: null };
 	}
 	return { session, user };
 }
 
-export function setPasswordResetSessionAsEmailVerified(sessionId: string): void {
-	db.execute("UPDATE password_reset_session SET email_verified = 1 WHERE id = ?", [sessionId]);
+export async function setPasswordResetSessionAsEmailVerified(sessionId: string): Promise<void> {
+	await db.execute("UPDATE password_reset_sessions SET email_verified = TRUE WHERE id = $1", [sessionId]);
 }
 
-export function setPasswordResetSessionAs2FAVerified(sessionId: string): void {
-	db.execute("UPDATE password_reset_session SET two_factor_verified = 1 WHERE id = ?", [sessionId]);
+export async function setPasswordResetSessionAs2FAVerified(sessionId: string): Promise<void> {
+	await db.execute("UPDATE password_reset_sessions SET two_factor_verified = TRUE WHERE id = $1", [sessionId]);
 }
 
-export function invalidateUserPasswordResetSessions(userId: number): void {
-	db.execute("DELETE FROM password_reset_session WHERE user_id = ?", [userId]);
+export async function invalidateUserPasswordResetSessions(userId: number): Promise<void> {
+	await db.execute("DELETE FROM password_reset_sessions WHERE user_id = $1", [userId]);
 }
 
-export function validatePasswordResetSessionRequest(event: RequestEvent): PasswordResetSessionValidationResult {
+export async function validatePasswordResetSessionRequest(event: RequestEvent): Promise<PasswordResetSessionValidationResult> {
 	const token = event.cookies.get("password_reset_session") ?? null;
 	if (token === null) {
 		return { session: null, user: null };
 	}
-	const result = validatePasswordResetSessionToken(token);
+	const result = await validatePasswordResetSessionToken(token);
 	if (result.session === null) {
 		deletePasswordResetSessionTokenCookie(event);
 	}
 	return result;
 }
 
-export function setPasswordResetSessionTokenCookie(event: RequestEvent, token: string, expiresAt: Date): void {
-	event.cookies.set("password_reset_session", token, {
+export async function setPasswordResetSessionTokenCookie(event: RequestEvent, token: string, expiresAt: Date): Promise<void> {
+	await event.cookies.set("password_reset_session", token, {
 		expires: expiresAt,
 		sameSite: "lax",
 		httpOnly: true,
