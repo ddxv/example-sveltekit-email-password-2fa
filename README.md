@@ -1,4 +1,4 @@
-# Email and password example with 2FA in SvelteKit
+# Email and password example with 2FA in SvelteKit and PostgreSQL
 
 Built with SQLite.
 

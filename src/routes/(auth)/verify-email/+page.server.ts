@@ -94,9 +94,6 @@ async function verifyCode(event: RequestEvent) {
 			}
 		});
 	}
-	// CHECK LATER
-	console.log(Date.now(), verificationRequest.expiresAt.getTime());
-	console.log(Date.now() >= verificationRequest.expiresAt.getTime());
 	if (Date.now() >= verificationRequest.expiresAt.getTime()) {
 		verificationRequest = await createEmailVerificationRequest(verificationRequest.userId, verificationRequest.email);
 		await sendVerificationEmail(verificationRequest.email, verificationRequest.code);
@@ -113,9 +110,9 @@ async function verifyCode(event: RequestEvent) {
 			}
 		});
 	}
-	deleteUserEmailVerificationRequest(event.locals.user.id);
-	invalidateUserPasswordResetSessions(event.locals.user.id);
-	updateUserEmailAndSetEmailAsVerified(event.locals.user.id, verificationRequest.email);
+	await deleteUserEmailVerificationRequest(event.locals.user.id);
+	await invalidateUserPasswordResetSessions(event.locals.user.id);
+	await updateUserEmailAndSetEmailAsVerified(event.locals.user.id, verificationRequest.email);
 	deleteEmailVerificationRequestCookie(event);
 	if (!event.locals.user.registered2FA) {
 		return redirect(302, "/2fa/setup");

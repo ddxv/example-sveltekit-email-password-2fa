@@ -9,7 +9,5 @@ export async function checkEmailAvailability(email: string): Promise<boolean> {
 	if (row === null) {
 		throw new Error("Failed to check email availability");
 	}
-	console.log("EMAIL CHECK", email, row);
-	console.log("EMAIL CHECK", email, row.available);
 	return row.available;
 }

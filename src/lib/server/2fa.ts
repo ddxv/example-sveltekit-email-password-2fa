@@ -7,8 +7,7 @@ export const totpBucket = new ExpiringTokenBucket<number>(5, 60 * 30);
 export const recoveryCodeBucket = new ExpiringTokenBucket<number>(3, 60 * 60);
 
 export async function resetUser2FAWithRecoveryCode(userId: number, recoveryCode: string): Promise<boolean> {
-	// Note: In Postgres and MySQL, these queries should be done in a transaction using SELECT FOR UPDATE
-	const row = await db.queryOne<{ recovery_code: Buffer }>("SELECT recovery_code FROM user WHERE id = ?", [userId]);
+	const row = await db.queryOne<{ recovery_code: Buffer }>("SELECT recovery_code FROM users WHERE id = $1", [userId]);
 	if (row === null) {
 		return false;
 	}

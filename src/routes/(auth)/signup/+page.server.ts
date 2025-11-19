@@ -63,7 +63,6 @@ async function action(event: RequestEvent) {
 		});
 	}
 	const emailAvailable = await checkEmailAvailability(email);
-	console.log("EMAIL AVAILABLE", emailAvailable);
 	if (!emailAvailable) {
 		return fail(400, {
 			message: "Email is already used",
